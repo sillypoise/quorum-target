@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { loadBooks, parseTags, saveBooks, type Book } from "./bookStorage";
+import { isRating, loadBooks, parseTags, saveBooks, type Book } from "./bookStorage";
 import { Shelf } from "./Shelf";
 
 type StatusFilter = "All" | Book["status"];
@@ -61,10 +61,6 @@ export function App() {
     setBooks((currentBooks) =>
       currentBooks.map((book) => (book.id === id ? { ...book, status: "Finished" } : book)),
     );
-  }
-
-  function isRating(value: number): value is Exclude<Book["rating"], null> {
-    return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
