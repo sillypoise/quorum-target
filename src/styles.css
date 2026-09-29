@@ -20,7 +20,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -139,10 +140,14 @@ h1 {
 
 .book-form {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   align-items: end;
   gap: 0.85rem;
   margin: 1.25rem 0 1.5rem;
+}
+
+.book-form button {
+  justify-self: start;
 }
 
 .form-field {
@@ -156,7 +161,8 @@ h1 {
   font-weight: 700;
 }
 
-.form-field input {
+.form-field input,
+.form-field textarea {
   width: 100%;
   min-width: 0;
   padding: 0.7rem 0.75rem;
@@ -166,7 +172,15 @@ h1 {
   background: #fffdf8;
 }
 
+.form-field textarea {
+  min-width: 0;
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .form-field input:focus-visible,
+.form-field textarea:focus-visible,
 .form-field select:focus-visible,
 .book-form button:focus-visible,
 .edit-form button:focus-visible {
@@ -214,6 +228,12 @@ h1 {
   margin-bottom: 0;
   color: #777065;
   font-size: 0.9rem;
+}
+
+.book .book-note {
+  margin-top: 0.55rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .status {
