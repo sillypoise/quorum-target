@@ -55,7 +55,7 @@ export function App() {
     const book = books.find((item) => item.id === id);
     if (!book) return;
     setEditingBookId(id);
-    setEditDraft({ title: book.title, author: book.author, status: book.status });
+    setEditDraft({ title: book.title, author: book.author, status: book.status, note: book.note });
     requestAnimationFrame(() => editTitleInput.current?.focus());
   }
 
@@ -64,10 +64,11 @@ export function App() {
     if (!editDraft) return;
     const title = editDraft.title.trim();
     const author = editDraft.author.trim();
+    const note = editDraft.note.trim();
     if (!title || !author) return;
 
     setBooks((currentBooks) => currentBooks.map((book) =>
-      book.id === id ? { ...book, title, author, status: editDraft.status } : book,
+      book.id === id ? { ...book, title, author, status: editDraft.status, note } : book,
     ));
     setEditingBookId(null);
     setEditDraft(null);
@@ -90,13 +91,14 @@ export function App() {
     const data = new FormData(form);
     const title = String(data.get("title") ?? "").trim();
     const author = String(data.get("author") ?? "").trim();
+    const note = String(data.get("note") ?? "").trim();
 
     if (!title || !author) {
       return;
     }
 
     const id = Math.max(0, ...books.map((book) => book.id)) + 1;
-    setBooks([...books, { id, title, author, status: "Up next" }]);
+    setBooks([...books, { id, title, author, status: "Up next", note }]);
     form.reset();
     titleInput.current?.focus();
   }
@@ -154,6 +156,10 @@ export function App() {
             <label htmlFor="book-author">Author</label>
             <input id="book-author" name="author" required />
           </div>
+          <div className="form-field note-field">
+            <label htmlFor="book-note">Note (optional)</label>
+            <textarea id="book-note" name="note" rows={2} />
+          </div>
           <button type="submit">Add book</button>
         </form>
         <ul className="book-list">
@@ -186,6 +192,11 @@ export function App() {
                       <option>Reading</option><option>Up next</option><option>Finished</option>
                     </select>
                   </div>
+                  <div className="form-field note-field">
+                    <label htmlFor={`edit-note-${book.id}`}>Note (optional)</label>
+                    <textarea id={`edit-note-${book.id}`} rows={2} value={editDraft.note}
+                      onChange={(event) => setEditDraft({ ...editDraft, note: event.target.value })} />
+                  </div>
                   <div className="book-actions edit-actions">
                     <button className="save-button" type="submit">Save</button>
                     <button className="cancel-button" type="button" onClick={handleCancelEdit}>Cancel</button>
@@ -197,6 +208,7 @@ export function App() {
               <div>
                 <h3>{book.title}</h3>
                 <p>{book.author}</p>
+                {book.note.length > 0 && <p className="book-note">{book.note}</p>}
               </div>
               <div className="book-actions">
                 <button className="edit-button" type="button" onClick={() => handleEdit(book.id)}>Edit</button>
