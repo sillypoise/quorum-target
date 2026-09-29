@@ -191,6 +191,49 @@ h1 {
   background: #f0dfb4;
 }
 
+.book-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.finish-button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #b9aa91;
+  border-radius: 0.5rem;
+  color: #504a40;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finish-button:hover {
+  border-color: #315c50;
+  color: #24483f;
+  background: #edf2ec;
+}
+
+.finish-button:focus-visible {
+  outline: 3px solid rgb(49 92 80 / 35%);
+  outline-offset: 2px;
+}
+
+.finished-indicator {
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  color: #315c50;
+  background: #e3ece4;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.book:has(.finished-indicator) h3,
+.book:has(.finished-indicator) p {
+  color: #777065;
+}
+
 @media (max-width: 540px) {
   .shell {
     padding: 3rem 0;
@@ -206,5 +249,10 @@ h1 {
 
   .book {
     align-items: flex-start;
+  }
+
+  .book-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
