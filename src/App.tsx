@@ -7,6 +7,8 @@ interface Book {
   status: "Reading" | "Up next" | "Finished";
 }
 
+type StatusFilter = "All" | Book["status"];
+
 const BOOKS: Book[] = [
   { id: 1, title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", status: "Reading" },
   { id: 2, title: "The Dispossessed", author: "Ursula K. Le Guin", status: "Up next" },
@@ -15,6 +17,10 @@ const BOOKS: Book[] = [
 
 export function App() {
   const [books, setBooks] = useState(BOOKS);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const visibleBooks = statusFilter === "All"
+    ? books
+    : books.filter((book) => book.status === statusFilter);
   const titleInput = useRef<HTMLInputElement>(null);
 
   function handleFinish(id: number) {
@@ -51,7 +57,20 @@ export function App() {
       <section className="library" aria-labelledby="library-title">
         <div className="section-heading">
           <h2 id="library-title">On your shelf</h2>
-          <span>{books.length} books</span>
+          <div className="shelf-controls">
+            <label htmlFor="status-filter">Filter by status</label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+            >
+              <option value="All">All</option>
+              <option value="Reading">Reading</option>
+              <option value="Up next">Up next</option>
+              <option value="Finished">Finished</option>
+            </select>
+            <span>{statusFilter === "All" ? `${books.length} books` : `${visibleBooks.length} of ${books.length} books`}</span>
+          </div>
         </div>
         <form className="book-form" onSubmit={handleSubmit}>
           <div className="form-field">
@@ -65,7 +84,9 @@ export function App() {
           <button type="submit">Add book</button>
         </form>
         <ul className="book-list">
-          {books.map((book) => (
+          {visibleBooks.length === 0 ? (
+            <li className="empty-state" role="status">No books have the status “{statusFilter}”.</li>
+          ) : visibleBooks.map((book) => (
             <li className="book" key={book.id}>
               <div>
                 <h3>{book.title}</h3>
