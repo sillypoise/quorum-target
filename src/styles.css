@@ -84,6 +84,40 @@ h1 {
   margin-bottom: 1rem;
 }
 
+.shelf-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  color: #777065;
+  font-size: 0.82rem;
+}
+
+.shelf-controls label {
+  color: #504a40;
+  font-weight: 700;
+}
+
+.shelf-controls select {
+  max-width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #cfc6b7;
+  border-radius: 0.55rem;
+  color: #211f1a;
+  background: #fffdf8;
+}
+
+.shelf-controls select:focus-visible {
+  outline: 3px solid rgb(157 77 53 / 35%);
+  outline-offset: 2px;
+}
+
+.empty-state {
+  padding: 1.15rem 0;
+  border-top: 1px solid #e1dbd1;
+  color: #777065;
+}
+
 .section-heading h2 {
   margin-bottom: 0;
   font-family: Georgia, serif;
@@ -237,6 +271,16 @@ h1 {
 @media (max-width: 540px) {
   .shell {
     padding: 3rem 0;
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .shelf-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .book-form {
