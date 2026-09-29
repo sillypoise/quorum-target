@@ -16,7 +16,7 @@ const BOOKS: Book[] = [
   { id: 3, title: "Kindred", author: "Octavia E. Butler", status: "Up next", note: "", tags: [], rating: null },
 ];
 
-function isRating(value: unknown): value is Exclude<Book["rating"], null> {
+export function isRating(value: unknown): value is Exclude<Book["rating"], null> {
   return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
 }
 
