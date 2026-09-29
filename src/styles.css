@@ -96,6 +96,55 @@ h1 {
   font-size: 0.82rem;
 }
 
+.book-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 0.85rem;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.form-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.form-field label {
+  color: #504a40;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.form-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #cfc6b7;
+  border-radius: 0.55rem;
+  color: #211f1a;
+  background: #fffdf8;
+}
+
+.form-field input:focus-visible,
+.book-form button:focus-visible {
+  outline: 3px solid rgb(157 77 53 / 35%);
+  outline-offset: 2px;
+}
+
+.book-form button {
+  padding: 0.72rem 1rem;
+  border: 0;
+  border-radius: 0.55rem;
+  color: #fffdf8;
+  background: #9d4d35;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.book-form button:hover {
+  background: #803c29;
+}
+
 .book-list {
   display: grid;
   gap: 0;
@@ -145,6 +194,14 @@ h1 {
 @media (max-width: 540px) {
   .shell {
     padding: 3rem 0;
+  }
+
+  .book-form {
+    grid-template-columns: 1fr;
+  }
+
+  .book-form button {
+    justify-self: start;
   }
 
   .book {

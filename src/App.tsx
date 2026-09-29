@@ -1,3 +1,5 @@
+import { useRef, useState, type FormEvent } from "react";
+
 interface Book {
   id: number;
   title: string;
@@ -12,6 +14,26 @@ const BOOKS: Book[] = [
 ];
 
 export function App() {
+  const [books, setBooks] = useState(BOOKS);
+  const titleInput = useRef<HTMLInputElement>(null);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const title = String(data.get("title") ?? "").trim();
+    const author = String(data.get("author") ?? "").trim();
+
+    if (!title || !author) {
+      return;
+    }
+
+    const id = Math.max(0, ...books.map((book) => book.id)) + 1;
+    setBooks([...books, { id, title, author, status: "Up next" }]);
+    form.reset();
+    titleInput.current?.focus();
+  }
+
   return (
     <main className="shell">
       <header className="hero">
@@ -23,10 +45,21 @@ export function App() {
       <section className="library" aria-labelledby="library-title">
         <div className="section-heading">
           <h2 id="library-title">On your shelf</h2>
-          <span>{BOOKS.length} books</span>
+          <span>{books.length} books</span>
         </div>
+        <form className="book-form" onSubmit={handleSubmit}>
+          <div className="form-field">
+            <label htmlFor="book-title">Title</label>
+            <input ref={titleInput} id="book-title" name="title" required />
+          </div>
+          <div className="form-field">
+            <label htmlFor="book-author">Author</label>
+            <input id="book-author" name="author" required />
+          </div>
+          <button type="submit">Add book</button>
+        </form>
         <ul className="book-list">
-          {BOOKS.map((book) => (
+          {books.map((book) => (
             <li className="book" key={book.id}>
               <div>
                 <h3>{book.title}</h3>
