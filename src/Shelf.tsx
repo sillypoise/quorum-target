@@ -89,6 +89,14 @@ export function Shelf(props: Props) {
                     onChange={(event) => onEditDraftChange({ ...editDraft, status: event.target.value as Book["status"] })}>
                     <option>Reading</option><option>Up next</option><option>Finished</option>
                   </select></div>
+                <div className="form-field"><label htmlFor={`edit-rating-${book.id}`}>Rating (optional)</label>
+                  <select id={`edit-rating-${book.id}`} value={editDraft.rating ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      onEditDraftChange({ ...editDraft, rating: value === "" ? null : Number(value) as Exclude<Book["rating"], null> });
+                    }}>
+                    <option value="">Unrated</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating} star{rating === 1 ? "" : "s"}</option>)}
+                  </select></div>
                 <div className="form-field"><label htmlFor={`edit-tags-${book.id}`}>Tags (optional)</label>
                   <input id={`edit-tags-${book.id}`} placeholder="Comma-separated tags" value={editDraft.tags}
                     onChange={(event) => onEditDraftChange({ ...editDraft, tags: event.target.value })} /></div>
@@ -104,6 +112,11 @@ export function Shelf(props: Props) {
               </form>
             ) : <>
               <div><h3>{book.title}</h3><p>{book.author}</p>
+                <p className={book.rating === null ? "shelf-rating unrated" : "shelf-rating"}>
+                  {book.rating === null ? "Unrated" : <span aria-label={`${book.rating} out of 5 stars`}>
+                    {Array.from({ length: 5 }, (_, index) => <span key={index} aria-hidden="true">{index < book.rating! ? "★" : "☆"}</span>)}
+                  </span>}
+                </p>
                 {book.note.length > 0 && <p className="book-note">{book.note}</p>}
                 {book.tags.length > 0 && <ul className="book-tags" aria-label="Tags">
                   {book.tags.map((tag, index) => <li key={`${index}-${tag}`}>{tag}</li>)}

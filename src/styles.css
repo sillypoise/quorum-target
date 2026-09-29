@@ -230,6 +230,19 @@ h1 {
   font-size: 0.9rem;
 }
 
+.book .shelf-rating {
+  margin-top: 0.4rem;
+  color: #765a1f;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+}
+
+.book .shelf-rating.unrated {
+  color: #666056;
+  font-size: 0.82rem;
+  letter-spacing: normal;
+}
+
 .book .book-note {
   margin-top: 0.55rem;
   white-space: pre-wrap;

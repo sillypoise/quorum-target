@@ -32,7 +32,7 @@ export function App() {
     const book = books.find((item) => item.id === id);
     if (!book) return;
     setEditingBookId(id);
-    setEditDraft({ title: book.title, author: book.author, status: book.status, note: book.note, tags: book.tags.join(", ") });
+    setEditDraft({ title: book.title, author: book.author, status: book.status, note: book.note, tags: book.tags.join(", "), rating: book.rating });
     requestAnimationFrame(() => editTitleInput.current?.focus());
   }
 
@@ -46,7 +46,7 @@ export function App() {
     if (!title || !author) return;
 
     setBooks((currentBooks) => currentBooks.map((book) =>
-      book.id === id ? { ...book, title, author, status: editDraft.status, note, tags } : book,
+      book.id === id ? { ...book, title, author, status: editDraft.status, note, tags, rating: editDraft.rating } : book,
     ));
     setEditingBookId(null);
     setEditDraft(null);
@@ -63,6 +63,10 @@ export function App() {
     );
   }
 
+  function isRating(value: number): value is Exclude<Book["rating"], null> {
+    return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -71,13 +75,16 @@ export function App() {
     const author = String(data.get("author") ?? "").trim();
     const note = String(data.get("note") ?? "").trim();
     const tags = parseTags(String(data.get("tags") ?? ""));
+    const ratingValue = String(data.get("rating") ?? "");
+    const rating = ratingValue === "" ? null : Number(ratingValue);
+    if (rating !== null && !isRating(rating)) return;
 
     if (!title || !author) {
       return;
     }
 
     const id = Math.max(0, ...books.map((book) => book.id)) + 1;
-    setBooks([...books, { id, title, author, status: "Up next", note, tags }]);
+    setBooks([...books, { id, title, author, status: "Up next", note, tags, rating }]);
     form.reset();
     titleInput.current?.focus();
   }
@@ -94,6 +101,7 @@ export function App() {
           <div className="form-field"><label htmlFor="book-title">Title</label><input ref={titleInput} id="book-title" name="title" required /></div>
           <div className="form-field"><label htmlFor="book-author">Author</label><input id="book-author" name="author" required /></div>
           <div className="form-field"><label htmlFor="book-tags">Tags (optional)</label><input id="book-tags" name="tags" placeholder="Comma-separated tags" /></div>
+          <div className="form-field"><label htmlFor="book-rating">Rating (optional)</label><select id="book-rating" name="rating" defaultValue=""><option value="">Unrated</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating} star{rating === 1 ? "" : "s"}</option>)}</select></div>
           <div className="form-field note-field"><label htmlFor="book-note">Note (optional)</label><textarea id="book-note" name="note" rows={2} /></div>
           <button type="submit">Add book</button>
         </form>
