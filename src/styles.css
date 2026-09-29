@@ -344,17 +344,6 @@ h1 {
   background: #f0ece4;
 }
 
-.finish-button {
-  padding: 0.45rem 0.7rem;
-  border: 1px solid #b9aa91;
-  border-radius: 0.5rem;
-  color: #504a40;
-  background: transparent;
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .finish-button:hover {
   border-color: #315c50;
   color: #24483f;
