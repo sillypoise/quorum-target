@@ -28,6 +28,19 @@ type Props = {
   onToggleFavourite: (id: number) => void;
 };
 
+function FavouriteButton({ book, onToggleFavourite }: {
+  book: Book;
+  onToggleFavourite: (id: number) => void;
+}) {
+  return (
+    <button className={`favourite-button${book.favourite ? " is-favourite" : ""}`} type="button"
+      aria-label={`${book.favourite ? "Remove" : "Add"} ${book.title} ${book.favourite ? "from" : "to"} favourites`}
+      aria-pressed={book.favourite} onClick={() => onToggleFavourite(book.id)}>
+      {book.favourite ? "★ Favourite" : "☆ Favourite"}
+    </button>
+  );
+}
+
 export function Shelf(props: Props) {
   const { books, tagOptions, selectedTag, onSelectedTagChange, statusFilter, onStatusFilterChange, searchQuery, onSearchQueryChange,
     shelfSort, onShelfSortChange, favouritesOnly, onFavouritesOnlyChange, editingBookId, editDraft, editTitleInput,
@@ -99,11 +112,7 @@ export function Shelf(props: Props) {
           <li className="book" key={book.id}>
             {editingBookId === book.id && editDraft ? (
               <form className="edit-form" onSubmit={(event) => onEditSubmit(event, book.id)}>
-                <button className={`favourite-button${book.favourite ? " is-favourite" : ""}`} type="button"
-                  aria-label={`${book.favourite ? "Remove" : "Add"} ${book.title} ${book.favourite ? "from" : "to"} favourites`}
-                  aria-pressed={book.favourite} onClick={() => onToggleFavourite(book.id)}>
-                  {book.favourite ? "★ Favourite" : "☆ Favourite"}
-                </button>
+                <FavouriteButton book={book} onToggleFavourite={onToggleFavourite} />
                 <div className="form-field"><label htmlFor={`edit-title-${book.id}`}>Title</label>
                   <input ref={editTitleInput} id={`edit-title-${book.id}`} required value={editDraft.title}
                     onChange={(event) => onEditDraftChange({ ...editDraft, title: event.target.value })} /></div>
@@ -148,11 +157,7 @@ export function Shelf(props: Props) {
                   {book.tags.map((tag, index) => <li key={`${index}-${tag}`}>{tag}</li>)}
                 </ul>}</div>
               <div className="book-actions">
-                <button className={`favourite-button${book.favourite ? " is-favourite" : ""}`} type="button"
-                  aria-label={`${book.favourite ? "Remove" : "Add"} ${book.title} ${book.favourite ? "from" : "to"} favourites`}
-                  aria-pressed={book.favourite} onClick={() => onToggleFavourite(book.id)}>
-                  {book.favourite ? "★ Favourite" : "☆ Favourite"}
-                </button>
+                <FavouriteButton book={book} onToggleFavourite={onToggleFavourite} />
                 <button className="edit-button" type="button" onClick={() => onEdit(book.id)}>Edit</button>
                 {book.status === "Finished" ? <span className="finished-indicator">Finished</span> :
                   <button className="finish-button" type="button" onClick={() => onFinish(book.id)}>Mark finished</button>}
