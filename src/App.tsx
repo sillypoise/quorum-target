@@ -43,6 +43,9 @@ function loadBooks(): Book[] {
 export function App() {
   const [books, setBooks] = useState<Book[]>(loadBooks);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [editingBookId, setEditingBookId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<Omit<Book, "id"> | null>(null);
+  const editTitleInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -58,6 +61,37 @@ export function App() {
 
   function handleRemove(id: number) {
     setBooks((currentBooks) => currentBooks.filter((book) => book.id !== id));
+    if (editingBookId === id) {
+      setEditingBookId(null);
+      setEditDraft(null);
+    }
+  }
+
+  function handleEdit(id: number) {
+    const book = books.find((item) => item.id === id);
+    if (!book) return;
+    setEditingBookId(id);
+    setEditDraft({ title: book.title, author: book.author, status: book.status });
+    requestAnimationFrame(() => editTitleInput.current?.focus());
+  }
+
+  function handleEditSubmit(event: FormEvent<HTMLFormElement>, id: number) {
+    event.preventDefault();
+    if (!editDraft) return;
+    const title = editDraft.title.trim();
+    const author = editDraft.author.trim();
+    if (!title || !author) return;
+
+    setBooks((currentBooks) => currentBooks.map((book) =>
+      book.id === id ? { ...book, title, author, status: editDraft.status } : book,
+    ));
+    setEditingBookId(null);
+    setEditDraft(null);
+  }
+
+  function handleCancelEdit() {
+    setEditingBookId(null);
+    setEditDraft(null);
   }
 
   function handleFinish(id: number) {
@@ -127,11 +161,39 @@ export function App() {
             </li>
           ) : visibleBooks.map((book) => (
             <li className="book" key={book.id}>
+              {editingBookId === book.id && editDraft ? (
+                <form className="edit-form" onSubmit={(event) => handleEditSubmit(event, book.id)}>
+                  <div className="form-field">
+                    <label htmlFor={`edit-title-${book.id}`}>Title</label>
+                    <input ref={editTitleInput} id={`edit-title-${book.id}`} required value={editDraft.title}
+                      onChange={(event) => setEditDraft({ ...editDraft, title: event.target.value })} />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor={`edit-author-${book.id}`}>Author</label>
+                    <input id={`edit-author-${book.id}`} required value={editDraft.author}
+                      onChange={(event) => setEditDraft({ ...editDraft, author: event.target.value })} />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor={`edit-status-${book.id}`}>Reading status</label>
+                    <select id={`edit-status-${book.id}`} value={editDraft.status}
+                      onChange={(event) => setEditDraft({ ...editDraft, status: event.target.value as Book["status"] })}>
+                      <option>Reading</option><option>Up next</option><option>Finished</option>
+                    </select>
+                  </div>
+                  <div className="book-actions edit-actions">
+                    <button className="save-button" type="submit">Save</button>
+                    <button className="cancel-button" type="button" onClick={handleCancelEdit}>Cancel</button>
+                    <button className="remove-button" type="button" aria-label={`Remove ${book.title} from reading list`}
+                      onClick={() => handleRemove(book.id)}>Remove</button>
+                  </div>
+                </form>
+              ) : <>
               <div>
                 <h3>{book.title}</h3>
                 <p>{book.author}</p>
               </div>
               <div className="book-actions">
+                <button className="edit-button" type="button" onClick={() => handleEdit(book.id)}>Edit</button>
                 {book.status === "Finished" ? (
                   <span className="finished-indicator">Finished</span>
                 ) : (
@@ -148,6 +210,7 @@ export function App() {
                   Remove
                 </button>
               </div>
+              </>}
             </li>
           ))}
         </ul>

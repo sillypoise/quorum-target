@@ -160,7 +160,9 @@ h1 {
 }
 
 .form-field input:focus-visible,
-.book-form button:focus-visible {
+.form-field select:focus-visible,
+.book-form button:focus-visible,
+.edit-form button:focus-visible {
   outline: 3px solid rgb(157 77 53 / 35%);
   outline-offset: 2px;
 }
@@ -225,11 +227,54 @@ h1 {
   background: #f0dfb4;
 }
 
+.edit-form {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: end;
+  gap: 0.85rem;
+}
+
+.form-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #cfc6b7;
+  border-radius: 0.55rem;
+  color: #211f1a;
+  background: #fffdf8;
+}
+
 .book-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 0.65rem;
+}
+
+.finish-button,
+.edit-button,
+.save-button,
+.cancel-button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #b9aa91;
+  border-radius: 0.5rem;
+  color: #504a40;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save-button {
+  border-color: #9d4d35;
+  color: #fffdf8;
+  background: #9d4d35;
+}
+
+.cancel-button:hover,
+.edit-button:hover {
+  background: #f0ece4;
 }
 
 .finish-button {
@@ -322,5 +367,13 @@ h1 {
   .book-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-actions {
+    justify-content: flex-start;
   }
 }
