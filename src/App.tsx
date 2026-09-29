@@ -4,7 +4,7 @@ interface Book {
   id: number;
   title: string;
   author: string;
-  status: "Reading" | "Up next";
+  status: "Reading" | "Up next" | "Finished";
 }
 
 const BOOKS: Book[] = [
@@ -16,6 +16,12 @@ const BOOKS: Book[] = [
 export function App() {
   const [books, setBooks] = useState(BOOKS);
   const titleInput = useRef<HTMLInputElement>(null);
+
+  function handleFinish(id: number) {
+    setBooks((currentBooks) =>
+      currentBooks.map((book) => (book.id === id ? { ...book, status: "Finished" } : book)),
+    );
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,9 +71,15 @@ export function App() {
                 <h3>{book.title}</h3>
                 <p>{book.author}</p>
               </div>
-              <span className={`status status-${book.status === "Reading" ? "active" : "next"}`}>
-                {book.status}
-              </span>
+              <div className="book-actions">
+                {book.status === "Finished" ? (
+                  <span className="finished-indicator">Finished</span>
+                ) : (
+                  <button className="finish-button" type="button" onClick={() => handleFinish(book.id)}>
+                    Mark finished
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
