@@ -12,9 +12,9 @@ type Props = {
   shelfSort: ShelfSort;
   onShelfSortChange: (sort: ShelfSort) => void;
   editingBookId: number | null;
-  editDraft: Omit<Book, "id"> | null;
+  editDraft: (Omit<Book, "id" | "tags"> & { tags: string }) | null;
   editTitleInput: React.RefObject<HTMLInputElement | null>;
-  onEditDraftChange: (draft: Omit<Book, "id">) => void;
+  onEditDraftChange: (draft: Omit<Book, "id" | "tags"> & { tags: string }) => void;
   onEditSubmit: (event: React.FormEvent<HTMLFormElement>, id: number) => void;
   onCancelEdit: () => void;
   onRemove: (id: number) => void;
@@ -89,6 +89,9 @@ export function Shelf(props: Props) {
                     onChange={(event) => onEditDraftChange({ ...editDraft, status: event.target.value as Book["status"] })}>
                     <option>Reading</option><option>Up next</option><option>Finished</option>
                   </select></div>
+                <div className="form-field"><label htmlFor={`edit-tags-${book.id}`}>Tags (optional)</label>
+                  <input id={`edit-tags-${book.id}`} placeholder="Comma-separated tags" value={editDraft.tags}
+                    onChange={(event) => onEditDraftChange({ ...editDraft, tags: event.target.value })} /></div>
                 <div className="form-field note-field"><label htmlFor={`edit-note-${book.id}`}>Note (optional)</label>
                   <textarea id={`edit-note-${book.id}`} rows={2} value={editDraft.note}
                     onChange={(event) => onEditDraftChange({ ...editDraft, note: event.target.value })} /></div>
@@ -101,7 +104,10 @@ export function Shelf(props: Props) {
               </form>
             ) : <>
               <div><h3>{book.title}</h3><p>{book.author}</p>
-                {book.note.length > 0 && <p className="book-note">{book.note}</p>}</div>
+                {book.note.length > 0 && <p className="book-note">{book.note}</p>}
+                {book.tags.length > 0 && <ul className="book-tags" aria-label="Tags">
+                  {book.tags.map((tag, index) => <li key={`${index}-${tag}`}>{tag}</li>)}
+                </ul>}</div>
               <div className="book-actions">
                 <button className="edit-button" type="button" onClick={() => onEdit(book.id)}>Edit</button>
                 {book.status === "Finished" ? <span className="finished-indicator">Finished</span> :
