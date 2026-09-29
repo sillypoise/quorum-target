@@ -23,6 +23,10 @@ export function App() {
     : books.filter((book) => book.status === statusFilter);
   const titleInput = useRef<HTMLInputElement>(null);
 
+  function handleRemove(id: number) {
+    setBooks((currentBooks) => currentBooks.filter((book) => book.id !== id));
+  }
+
   function handleFinish(id: number) {
     setBooks((currentBooks) =>
       currentBooks.map((book) => (book.id === id ? { ...book, status: "Finished" } : book)),
@@ -85,7 +89,9 @@ export function App() {
         </form>
         <ul className="book-list">
           {visibleBooks.length === 0 ? (
-            <li className="empty-state" role="status">No books have the status “{statusFilter}”.</li>
+            <li className="empty-state" role="status">
+              {statusFilter === "All" ? "Your reading list is empty." : `No books have the status “${statusFilter}”.`}
+            </li>
           ) : visibleBooks.map((book) => (
             <li className="book" key={book.id}>
               <div>
@@ -100,6 +106,14 @@ export function App() {
                     Mark finished
                   </button>
                 )}
+                <button
+                  className="remove-button"
+                  type="button"
+                  aria-label={`Remove ${book.title} from reading list`}
+                  onClick={() => handleRemove(book.id)}
+                >
+                  Remove
+                </button>
               </div>
             </li>
           ))}
