@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { loadBooks, saveBooks, type Book } from "./bookStorage";
+import { loadBooks, parseTags, saveBooks, type Book } from "./bookStorage";
 import { Shelf } from "./Shelf";
 
 type StatusFilter = "All" | Book["status"];
@@ -11,7 +11,8 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [shelfSort, setShelfSort] = useState<ShelfSort>("collection");
   const [editingBookId, setEditingBookId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<Omit<Book, "id"> | null>(null);
+  type EditDraft = Omit<Book, "id" | "tags"> & { tags: string };
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const editTitleInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -31,7 +32,7 @@ export function App() {
     const book = books.find((item) => item.id === id);
     if (!book) return;
     setEditingBookId(id);
-    setEditDraft({ title: book.title, author: book.author, status: book.status, note: book.note });
+    setEditDraft({ title: book.title, author: book.author, status: book.status, note: book.note, tags: book.tags.join(", ") });
     requestAnimationFrame(() => editTitleInput.current?.focus());
   }
 
@@ -41,10 +42,11 @@ export function App() {
     const title = editDraft.title.trim();
     const author = editDraft.author.trim();
     const note = editDraft.note.trim();
+    const tags = parseTags(editDraft.tags);
     if (!title || !author) return;
 
     setBooks((currentBooks) => currentBooks.map((book) =>
-      book.id === id ? { ...book, title, author, status: editDraft.status, note } : book,
+      book.id === id ? { ...book, title, author, status: editDraft.status, note, tags } : book,
     ));
     setEditingBookId(null);
     setEditDraft(null);
@@ -68,13 +70,14 @@ export function App() {
     const title = String(data.get("title") ?? "").trim();
     const author = String(data.get("author") ?? "").trim();
     const note = String(data.get("note") ?? "").trim();
+    const tags = parseTags(String(data.get("tags") ?? ""));
 
     if (!title || !author) {
       return;
     }
 
     const id = Math.max(0, ...books.map((book) => book.id)) + 1;
-    setBooks([...books, { id, title, author, status: "Up next", note }]);
+    setBooks([...books, { id, title, author, status: "Up next", note, tags }]);
     form.reset();
     titleInput.current?.focus();
   }
@@ -90,6 +93,7 @@ export function App() {
       <form className="book-form" onSubmit={handleSubmit}>
           <div className="form-field"><label htmlFor="book-title">Title</label><input ref={titleInput} id="book-title" name="title" required /></div>
           <div className="form-field"><label htmlFor="book-author">Author</label><input id="book-author" name="author" required /></div>
+          <div className="form-field"><label htmlFor="book-tags">Tags (optional)</label><input id="book-tags" name="tags" placeholder="Comma-separated tags" /></div>
           <div className="form-field note-field"><label htmlFor="book-note">Note (optional)</label><textarea id="book-note" name="note" rows={2} /></div>
           <button type="submit">Add book</button>
         </form>

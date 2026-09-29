@@ -236,6 +236,26 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.book-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.book-tags li {
+  max-width: 100%;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: #f0ece4;
+  color: #504a40;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .status {
   flex: 0 0 auto;
   padding: 0.38rem 0.65rem;
