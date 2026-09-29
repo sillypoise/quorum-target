@@ -254,6 +254,30 @@ h1 {
   outline-offset: 2px;
 }
 
+.remove-button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #9d4d35;
+  border-radius: 0.5rem;
+  color: #803c29;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.remove-button:hover {
+  border-color: #803c29;
+  color: #fffdf8;
+  background: #803c29;
+}
+
+.remove-button:focus-visible {
+  outline: 3px solid #211f1a;
+  outline-offset: 2px;
+}
+
 .finished-indicator {
   padding: 0.38rem 0.65rem;
   border-radius: 999px;
