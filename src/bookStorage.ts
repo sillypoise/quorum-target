@@ -5,15 +5,20 @@ export interface Book {
   status: "Reading" | "Up next" | "Finished";
   note: string;
   tags: string[];
+  rating: 1 | 2 | 3 | 4 | 5 | null;
 }
 
 const BOOKS_STORAGE_KEY = "pocket-library:reading-list";
 
 const BOOKS: Book[] = [
-  { id: 1, title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", status: "Reading", note: "", tags: [] },
-  { id: 2, title: "The Dispossessed", author: "Ursula K. Le Guin", status: "Up next", note: "", tags: [] },
-  { id: 3, title: "Kindred", author: "Octavia E. Butler", status: "Up next", note: "", tags: [] },
+  { id: 1, title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", status: "Reading", note: "", tags: [], rating: null },
+  { id: 2, title: "The Dispossessed", author: "Ursula K. Le Guin", status: "Up next", note: "", tags: [], rating: null },
+  { id: 3, title: "Kindred", author: "Octavia E. Butler", status: "Up next", note: "", tags: [], rating: null },
 ];
+
+function isRating(value: unknown): value is Exclude<Book["rating"], null> {
+  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+}
 
 function isBookList(value: unknown): value is Book[] {
   return Array.isArray(value) && value.every((book) =>
@@ -36,7 +41,12 @@ export function loadBooks(): Book[] {
     const stored = window.localStorage.getItem(BOOKS_STORAGE_KEY);
     if (stored !== null) {
       const parsed: unknown = JSON.parse(stored);
-      if (isBookList(parsed)) return parsed.map((book) => ({ ...book, note: book.note ?? "", tags: book.tags ?? [] }));
+      if (isBookList(parsed)) return parsed.map((book) => ({
+        ...book,
+        note: book.note ?? "",
+        tags: book.tags ?? [],
+        rating: isRating(book.rating) ? book.rating : null,
+      }));
     }
   } catch {
     // Storage may be unavailable or contain malformed data; use the seed list.
