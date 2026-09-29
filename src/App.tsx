@@ -8,6 +8,7 @@ interface Book {
 }
 
 type StatusFilter = "All" | Book["status"];
+type ShelfSort = "collection" | "title" | "author";
 
 const BOOKS_STORAGE_KEY = "pocket-library:reading-list";
 
@@ -44,6 +45,7 @@ export function App() {
   const [books, setBooks] = useState<Book[]>(loadBooks);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [shelfSort, setShelfSort] = useState<ShelfSort>("collection");
   const [editingBookId, setEditingBookId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<Omit<Book, "id"> | null>(null);
   const editTitleInput = useRef<HTMLInputElement>(null);
@@ -56,13 +58,29 @@ export function App() {
     }
   }, [books]);
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
-  const visibleBooks = books.filter((book) => {
+  const filteredBooks = books.filter((book) => {
     const matchesStatus = statusFilter === "All" || book.status === statusFilter;
     const matchesSearch = normalizedQuery.length === 0 ||
       book.title.toLocaleLowerCase().includes(normalizedQuery) ||
       book.author.toLocaleLowerCase().includes(normalizedQuery);
     return matchesStatus && matchesSearch;
   });
+  const visibleBooks = shelfSort === "collection"
+    ? filteredBooks
+    : filteredBooks
+      .map((book, collectionIndex) => ({ book, collectionIndex }))
+      .sort((left, right) => {
+        const primaryField = shelfSort;
+        const secondaryField = shelfSort === "title" ? "author" : "title";
+        const primaryOrder = left.book[primaryField].localeCompare(
+          right.book[primaryField], undefined, { sensitivity: "base" },
+        );
+        const secondaryOrder = left.book[secondaryField].localeCompare(
+          right.book[secondaryField], undefined, { sensitivity: "base" },
+        );
+        return primaryOrder || secondaryOrder || left.collectionIndex - right.collectionIndex;
+      })
+      .map(({ book }) => book);
   const hasActiveFilter = statusFilter !== "All" || normalizedQuery.length > 0;
   const titleInput = useRef<HTMLInputElement>(null);
 
@@ -154,6 +172,16 @@ export function App() {
               <option value="Reading">Reading</option>
               <option value="Up next">Up next</option>
               <option value="Finished">Finished</option>
+            </select>
+            <label htmlFor="shelf-sort">Sort by</label>
+            <select
+              id="shelf-sort"
+              value={shelfSort}
+              onChange={(event) => setShelfSort(event.target.value as ShelfSort)}
+            >
+              <option value="collection">Collection order</option>
+              <option value="title">Title</option>
+              <option value="author">Author</option>
             </select>
             <span>{hasActiveFilter ? `${visibleBooks.length} of ${books.length} books` : `${books.length} books`}</span>
           </div>
