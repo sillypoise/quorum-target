@@ -5,6 +5,9 @@ type ShelfSort = "collection" | "title" | "author";
 
 type Props = {
   books: Book[];
+  tagOptions: string[];
+  selectedTag: string;
+  onSelectedTagChange: (tag: string) => void;
   statusFilter: StatusFilter;
   onStatusFilterChange: (filter: StatusFilter) => void;
   searchQuery: string;
@@ -26,17 +29,18 @@ type Props = {
 };
 
 export function Shelf(props: Props) {
-  const { books, statusFilter, onStatusFilterChange, searchQuery, onSearchQueryChange,
+  const { books, tagOptions, selectedTag, onSelectedTagChange, statusFilter, onStatusFilterChange, searchQuery, onSearchQueryChange,
     shelfSort, onShelfSortChange, favouritesOnly, onFavouritesOnlyChange, editingBookId, editDraft, editTitleInput,
     onEditDraftChange, onEditSubmit, onCancelEdit, onRemove, onEdit, onFinish, onToggleFavourite } = props;
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const filteredBooks = books.filter((book) => {
     const matchesStatus = statusFilter === "All" || book.status === statusFilter;
     const matchesFavourite = !favouritesOnly || book.favourite;
+    const matchesTag = selectedTag === "" || book.tags.includes(selectedTag);
     const matchesSearch = normalizedQuery.length === 0 ||
       book.title.toLocaleLowerCase().includes(normalizedQuery) ||
       book.author.toLocaleLowerCase().includes(normalizedQuery);
-    return matchesStatus && matchesSearch && matchesFavourite;
+    return matchesStatus && matchesSearch && matchesFavourite && matchesTag;
   });
   const visibleBooks = shelfSort === "collection" ? filteredBooks : filteredBooks
     .map((book, collectionIndex) => ({ book, collectionIndex }))
@@ -47,7 +51,7 @@ export function Shelf(props: Props) {
       const secondaryOrder = left.book[secondaryField].localeCompare(right.book[secondaryField], undefined, { sensitivity: "base" });
       return primaryOrder || secondaryOrder || left.collectionIndex - right.collectionIndex;
     }).map(({ book }) => book);
-  const hasActiveFilter = statusFilter !== "All" || normalizedQuery.length > 0 || favouritesOnly;
+  const hasActiveFilter = statusFilter !== "All" || normalizedQuery.length > 0 || favouritesOnly || selectedTag !== "";
 
   return (
     <section className="library" aria-labelledby="library-title">
@@ -60,6 +64,10 @@ export function Shelf(props: Props) {
           <label htmlFor="favourites-only">Favourites only</label>
           <input id="favourites-only" className="favourites-checkbox" type="checkbox" checked={favouritesOnly}
             onChange={(event) => onFavouritesOnlyChange(event.target.checked)} />
+          <label htmlFor="tag-filter">Filter by tag</label>
+          <select id="tag-filter" value={selectedTag} onChange={(event) => onSelectedTagChange(event.target.value)}>
+            <option value="">All tags</option>{tagOptions.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+          </select>
           <label htmlFor="status-filter">Filter by status</label>
           <select id="status-filter" value={statusFilter}
             onChange={(event) => onStatusFilterChange(event.target.value as StatusFilter)}>
@@ -77,7 +85,9 @@ export function Shelf(props: Props) {
       <ul className="book-list">
         {visibleBooks.length === 0 ? (
           <li className="empty-state" role="status">
-            {books.length === 0 ? "Your reading list is empty." : favouritesOnly
+            {books.length === 0 ? "Your reading list is empty." : selectedTag !== ""
+              ? "No books match your selected filters."
+              : favouritesOnly
               ? normalizedQuery.length > 0 || statusFilter !== "All"
                 ? "No favourite books match your search and selected status."
                 : "You have no favourite books."
