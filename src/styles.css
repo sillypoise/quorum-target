@@ -110,8 +110,13 @@ h1 {
   background: #fffdf8;
 }
 
-.shelf-controls input {
+.shelf-controls input[type="search"] {
   width: 11rem;
+}
+
+.shelf-controls .favourites-checkbox {
+  width: auto;
+  accent-color: #9d4d35;
 }
 
 .shelf-controls input:focus-visible,
@@ -315,7 +320,8 @@ h1 {
 .finish-button,
 .edit-button,
 .save-button,
-.cancel-button {
+.cancel-button,
+.favourite-button {
   padding: 0.45rem 0.7rem;
   border: 1px solid #b9aa91;
   border-radius: 0.5rem;
@@ -333,7 +339,8 @@ h1 {
 }
 
 .cancel-button:hover,
-.edit-button:hover {
+.edit-button:hover,
+.favourite-button:hover {
   background: #f0ece4;
 }
 
@@ -352,6 +359,17 @@ h1 {
   border-color: #315c50;
   color: #24483f;
   background: #edf2ec;
+}
+
+.favourite-button.is-favourite {
+  border-color: #9d4d35;
+  color: #803c29;
+  background: #f6e8df;
+}
+
+.favourite-button:focus-visible {
+  outline: 3px solid rgb(157 77 53 / 35%);
+  outline-offset: 2px;
 }
 
 .finish-button:focus-visible {

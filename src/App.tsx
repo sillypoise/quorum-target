@@ -10,8 +10,9 @@ export function App() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [shelfSort, setShelfSort] = useState<ShelfSort>("collection");
+  const [favouritesOnly, setFavouritesOnly] = useState(false);
   const [editingBookId, setEditingBookId] = useState<number | null>(null);
-  type EditDraft = Omit<Book, "id" | "tags"> & { tags: string };
+  type EditDraft = Omit<Book, "id" | "tags" | "favourite"> & { tags: string };
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const editTitleInput = useRef<HTMLInputElement>(null);
 
@@ -57,6 +58,12 @@ export function App() {
     setEditDraft(null);
   }
 
+  function handleToggleFavourite(id: number) {
+    setBooks((currentBooks) => currentBooks.map((book) =>
+      book.id === id ? { ...book, favourite: !book.favourite } : book,
+    ));
+  }
+
   function handleFinish(id: number) {
     setBooks((currentBooks) =>
       currentBooks.map((book) => (book.id === id ? { ...book, status: "Finished" } : book)),
@@ -80,7 +87,7 @@ export function App() {
     }
 
     const id = Math.max(0, ...books.map((book) => book.id)) + 1;
-    setBooks([...books, { id, title, author, status: "Up next", note, tags, rating }]);
+    setBooks([...books, { id, title, author, status: "Up next", note, tags, rating, favourite: false }]);
     form.reset();
     titleInput.current?.focus();
   }
@@ -103,9 +110,10 @@ export function App() {
         </form>
       <Shelf books={books} statusFilter={statusFilter} onStatusFilterChange={setStatusFilter}
         searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} shelfSort={shelfSort}
-        onShelfSortChange={setShelfSort} editingBookId={editingBookId} editDraft={editDraft}
+        onShelfSortChange={setShelfSort} favouritesOnly={favouritesOnly} onFavouritesOnlyChange={setFavouritesOnly}
+        editingBookId={editingBookId} editDraft={editDraft}
         editTitleInput={editTitleInput} onEditDraftChange={setEditDraft} onEditSubmit={handleEditSubmit}
-        onCancelEdit={handleCancelEdit} onRemove={handleRemove} onEdit={handleEdit} onFinish={handleFinish} />
+        onCancelEdit={handleCancelEdit} onRemove={handleRemove} onEdit={handleEdit} onFinish={handleFinish} onToggleFavourite={handleToggleFavourite} />
     </main>
   );
 }
