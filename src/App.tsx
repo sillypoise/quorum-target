@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 interface Book {
   id: number;
@@ -9,15 +9,48 @@ interface Book {
 
 type StatusFilter = "All" | Book["status"];
 
+const BOOKS_STORAGE_KEY = "pocket-library:reading-list";
+
 const BOOKS: Book[] = [
   { id: 1, title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", status: "Reading" },
   { id: 2, title: "The Dispossessed", author: "Ursula K. Le Guin", status: "Up next" },
   { id: 3, title: "Kindred", author: "Octavia E. Butler", status: "Up next" },
 ];
 
+function isBookList(value: unknown): value is Book[] {
+  return Array.isArray(value) && value.every((book) =>
+    typeof book === "object" && book !== null &&
+    "id" in book && typeof book.id === "number" && Number.isFinite(book.id) &&
+    "title" in book && typeof book.title === "string" && book.title.trim().length > 0 &&
+    "author" in book && typeof book.author === "string" && book.author.trim().length > 0 &&
+    "status" in book && (book.status === "Reading" || book.status === "Up next" || book.status === "Finished"),
+  );
+}
+
+function loadBooks(): Book[] {
+  try {
+    const stored = window.localStorage.getItem(BOOKS_STORAGE_KEY);
+    if (stored !== null) {
+      const parsed: unknown = JSON.parse(stored);
+      if (isBookList(parsed)) return parsed;
+    }
+  } catch {
+    // Storage may be unavailable or contain malformed data; use the seed list.
+  }
+  return BOOKS;
+}
+
 export function App() {
-  const [books, setBooks] = useState(BOOKS);
+  const [books, setBooks] = useState<Book[]>(loadBooks);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(BOOKS_STORAGE_KEY, JSON.stringify(books));
+    } catch {
+      // Keep the in-memory reading list usable when storage is unavailable or full.
+    }
+  }, [books]);
   const visibleBooks = statusFilter === "All"
     ? books
     : books.filter((book) => book.status === statusFilter);
