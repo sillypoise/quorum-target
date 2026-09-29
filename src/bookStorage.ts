@@ -6,14 +6,15 @@ export interface Book {
   note: string;
   tags: string[];
   rating: 1 | 2 | 3 | 4 | 5 | null;
+  favourite: boolean;
 }
 
 const BOOKS_STORAGE_KEY = "pocket-library:reading-list";
 
 const BOOKS: Book[] = [
-  { id: 1, title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", status: "Reading", note: "", tags: [], rating: null },
-  { id: 2, title: "The Dispossessed", author: "Ursula K. Le Guin", status: "Up next", note: "", tags: [], rating: null },
-  { id: 3, title: "Kindred", author: "Octavia E. Butler", status: "Up next", note: "", tags: [], rating: null },
+  { id: 1, title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", status: "Reading", note: "", tags: [], rating: null, favourite: false },
+  { id: 2, title: "The Dispossessed", author: "Ursula K. Le Guin", status: "Up next", note: "", tags: [], rating: null, favourite: false },
+  { id: 3, title: "Kindred", author: "Octavia E. Butler", status: "Up next", note: "", tags: [], rating: null, favourite: false },
 ];
 
 export function isRating(value: unknown): value is Exclude<Book["rating"], null> {
@@ -46,6 +47,7 @@ export function loadBooks(): Book[] {
         note: book.note ?? "",
         tags: book.tags ?? [],
         rating: isRating(book.rating) ? book.rating : null,
+        favourite: book.favourite === true,
       }));
     }
   } catch {

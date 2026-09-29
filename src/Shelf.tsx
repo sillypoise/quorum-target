@@ -11,28 +11,32 @@ type Props = {
   onSearchQueryChange: (query: string) => void;
   shelfSort: ShelfSort;
   onShelfSortChange: (sort: ShelfSort) => void;
+  favouritesOnly: boolean;
+  onFavouritesOnlyChange: (enabled: boolean) => void;
   editingBookId: number | null;
-  editDraft: (Omit<Book, "id" | "tags"> & { tags: string }) | null;
+  editDraft: (Omit<Book, "id" | "tags" | "favourite"> & { tags: string }) | null;
   editTitleInput: React.RefObject<HTMLInputElement | null>;
-  onEditDraftChange: (draft: Omit<Book, "id" | "tags"> & { tags: string }) => void;
+  onEditDraftChange: (draft: Omit<Book, "id" | "tags" | "favourite"> & { tags: string }) => void;
   onEditSubmit: (event: React.FormEvent<HTMLFormElement>, id: number) => void;
   onCancelEdit: () => void;
   onRemove: (id: number) => void;
   onEdit: (id: number) => void;
   onFinish: (id: number) => void;
+  onToggleFavourite: (id: number) => void;
 };
 
 export function Shelf(props: Props) {
   const { books, statusFilter, onStatusFilterChange, searchQuery, onSearchQueryChange,
-    shelfSort, onShelfSortChange, editingBookId, editDraft, editTitleInput,
-    onEditDraftChange, onEditSubmit, onCancelEdit, onRemove, onEdit, onFinish } = props;
+    shelfSort, onShelfSortChange, favouritesOnly, onFavouritesOnlyChange, editingBookId, editDraft, editTitleInput,
+    onEditDraftChange, onEditSubmit, onCancelEdit, onRemove, onEdit, onFinish, onToggleFavourite } = props;
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const filteredBooks = books.filter((book) => {
     const matchesStatus = statusFilter === "All" || book.status === statusFilter;
+    const matchesFavourite = !favouritesOnly || book.favourite;
     const matchesSearch = normalizedQuery.length === 0 ||
       book.title.toLocaleLowerCase().includes(normalizedQuery) ||
       book.author.toLocaleLowerCase().includes(normalizedQuery);
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesSearch && matchesFavourite;
   });
   const visibleBooks = shelfSort === "collection" ? filteredBooks : filteredBooks
     .map((book, collectionIndex) => ({ book, collectionIndex }))
@@ -43,7 +47,7 @@ export function Shelf(props: Props) {
       const secondaryOrder = left.book[secondaryField].localeCompare(right.book[secondaryField], undefined, { sensitivity: "base" });
       return primaryOrder || secondaryOrder || left.collectionIndex - right.collectionIndex;
     }).map(({ book }) => book);
-  const hasActiveFilter = statusFilter !== "All" || normalizedQuery.length > 0;
+  const hasActiveFilter = statusFilter !== "All" || normalizedQuery.length > 0 || favouritesOnly;
 
   return (
     <section className="library" aria-labelledby="library-title">
@@ -53,6 +57,9 @@ export function Shelf(props: Props) {
           <label htmlFor="shelf-search">Search shelf</label>
           <input id="shelf-search" type="search" placeholder="Title or author" value={searchQuery}
             onChange={(event) => onSearchQueryChange(event.target.value)} />
+          <label htmlFor="favourites-only">Favourites only</label>
+          <input id="favourites-only" className="favourites-checkbox" type="checkbox" checked={favouritesOnly}
+            onChange={(event) => onFavouritesOnlyChange(event.target.checked)} />
           <label htmlFor="status-filter">Filter by status</label>
           <select id="status-filter" value={statusFilter}
             onChange={(event) => onStatusFilterChange(event.target.value as StatusFilter)}>
@@ -70,14 +77,23 @@ export function Shelf(props: Props) {
       <ul className="book-list">
         {visibleBooks.length === 0 ? (
           <li className="empty-state" role="status">
-            {books.length === 0 ? "Your reading list is empty." : normalizedQuery.length > 0
-              ? "No books match your search and selected status."
-              : `No books have the status “${statusFilter}”.`}
+            {books.length === 0 ? "Your reading list is empty." : favouritesOnly
+              ? normalizedQuery.length > 0 || statusFilter !== "All"
+                ? "No favourite books match your search and selected status."
+                : "You have no favourite books."
+              : normalizedQuery.length > 0
+                ? "No books match your search and selected status."
+                : `No books have the status “${statusFilter}”.`}
           </li>
         ) : visibleBooks.map((book) => (
           <li className="book" key={book.id}>
             {editingBookId === book.id && editDraft ? (
               <form className="edit-form" onSubmit={(event) => onEditSubmit(event, book.id)}>
+                <button className={`favourite-button${book.favourite ? " is-favourite" : ""}`} type="button"
+                  aria-label={`${book.favourite ? "Remove" : "Add"} ${book.title} ${book.favourite ? "from" : "to"} favourites`}
+                  aria-pressed={book.favourite} onClick={() => onToggleFavourite(book.id)}>
+                  {book.favourite ? "★ Favourite" : "☆ Favourite"}
+                </button>
                 <div className="form-field"><label htmlFor={`edit-title-${book.id}`}>Title</label>
                   <input ref={editTitleInput} id={`edit-title-${book.id}`} required value={editDraft.title}
                     onChange={(event) => onEditDraftChange({ ...editDraft, title: event.target.value })} /></div>
@@ -122,6 +138,11 @@ export function Shelf(props: Props) {
                   {book.tags.map((tag, index) => <li key={`${index}-${tag}`}>{tag}</li>)}
                 </ul>}</div>
               <div className="book-actions">
+                <button className={`favourite-button${book.favourite ? " is-favourite" : ""}`} type="button"
+                  aria-label={`${book.favourite ? "Remove" : "Add"} ${book.title} ${book.favourite ? "from" : "to"} favourites`}
+                  aria-pressed={book.favourite} onClick={() => onToggleFavourite(book.id)}>
+                  {book.favourite ? "★ Favourite" : "☆ Favourite"}
+                </button>
                 <button className="edit-button" type="button" onClick={() => onEdit(book.id)}>Edit</button>
                 {book.status === "Finished" ? <span className="finished-indicator">Finished</span> :
                   <button className="finish-button" type="button" onClick={() => onFinish(book.id)}>Mark finished</button>}
