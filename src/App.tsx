@@ -11,10 +11,18 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [shelfSort, setShelfSort] = useState<ShelfSort>("collection");
   const [favouritesOnly, setFavouritesOnly] = useState(false);
+  const [selectedTag, setSelectedTag] = useState("");
   const [editingBookId, setEditingBookId] = useState<number | null>(null);
   type EditDraft = Omit<Book, "id" | "tags" | "favourite"> & { tags: string };
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const editTitleInput = useRef<HTMLInputElement>(null);
+  const tagOptions = [...new Set(books.flatMap((book) => book.tags).filter((tag) => tag.trim().length > 0))]
+    .sort((left, right) => left.localeCompare(right) || (left < right ? -1 : left > right ? 1 : 0));
+  const selectedTagExists = selectedTag === "" || tagOptions.includes(selectedTag);
+
+  useEffect(() => {
+    if (!selectedTagExists) setSelectedTag("");
+  }, [selectedTagExists]);
 
   useEffect(() => {
     saveBooks(books);
@@ -108,7 +116,8 @@ export function App() {
           <div className="form-field note-field"><label htmlFor="book-note">Note (optional)</label><textarea id="book-note" name="note" rows={2} /></div>
           <button type="submit">Add book</button>
         </form>
-      <Shelf books={books} statusFilter={statusFilter} onStatusFilterChange={setStatusFilter}
+      <Shelf books={books} tagOptions={tagOptions} selectedTag={selectedTag} onSelectedTagChange={setSelectedTag}
+        statusFilter={statusFilter} onStatusFilterChange={setStatusFilter}
         searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} shelfSort={shelfSort}
         onShelfSortChange={setShelfSort} favouritesOnly={favouritesOnly} onFavouritesOnlyChange={setFavouritesOnly}
         editingBookId={editingBookId} editDraft={editDraft}
