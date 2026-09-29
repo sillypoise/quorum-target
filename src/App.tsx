@@ -43,6 +43,7 @@ function loadBooks(): Book[] {
 export function App() {
   const [books, setBooks] = useState<Book[]>(loadBooks);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingBookId, setEditingBookId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<Omit<Book, "id"> | null>(null);
   const editTitleInput = useRef<HTMLInputElement>(null);
@@ -54,9 +55,15 @@ export function App() {
       // Keep the in-memory reading list usable when storage is unavailable or full.
     }
   }, [books]);
-  const visibleBooks = statusFilter === "All"
-    ? books
-    : books.filter((book) => book.status === statusFilter);
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const visibleBooks = books.filter((book) => {
+    const matchesStatus = statusFilter === "All" || book.status === statusFilter;
+    const matchesSearch = normalizedQuery.length === 0 ||
+      book.title.toLocaleLowerCase().includes(normalizedQuery) ||
+      book.author.toLocaleLowerCase().includes(normalizedQuery);
+    return matchesStatus && matchesSearch;
+  });
+  const hasActiveFilter = statusFilter !== "All" || normalizedQuery.length > 0;
   const titleInput = useRef<HTMLInputElement>(null);
 
   function handleRemove(id: number) {
@@ -129,6 +136,14 @@ export function App() {
         <div className="section-heading">
           <h2 id="library-title">On your shelf</h2>
           <div className="shelf-controls">
+            <label htmlFor="shelf-search">Search shelf</label>
+            <input
+              id="shelf-search"
+              type="search"
+              placeholder="Title or author"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
             <label htmlFor="status-filter">Filter by status</label>
             <select
               id="status-filter"
@@ -140,7 +155,7 @@ export function App() {
               <option value="Up next">Up next</option>
               <option value="Finished">Finished</option>
             </select>
-            <span>{statusFilter === "All" ? `${books.length} books` : `${visibleBooks.length} of ${books.length} books`}</span>
+            <span>{hasActiveFilter ? `${visibleBooks.length} of ${books.length} books` : `${books.length} books`}</span>
           </div>
         </div>
         <form className="book-form" onSubmit={handleSubmit}>
@@ -157,7 +172,11 @@ export function App() {
         <ul className="book-list">
           {visibleBooks.length === 0 ? (
             <li className="empty-state" role="status">
-              {statusFilter === "All" ? "Your reading list is empty." : `No books have the status “${statusFilter}”.`}
+              {books.length === 0
+                ? "Your reading list is empty."
+                : normalizedQuery.length > 0
+                  ? "No books match your search and selected status."
+                  : `No books have the status “${statusFilter}”.`}
             </li>
           ) : visibleBooks.map((book) => (
             <li className="book" key={book.id}>
