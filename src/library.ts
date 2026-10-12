@@ -1,4 +1,5 @@
-export type Book = { title: string; author: string };
+// cover is an Open Library cover id, not a URL.
+export type Book = { title: string; author: string; cover?: number };
 export type Collection = { name: string; books: Book[] };
 export type Library = { collections: Collection[]; open: number };
 
@@ -31,6 +32,9 @@ export function browserStorage(): Storage | null {
   }
 }
 
+export const isCoverId = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value > 0;
+
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim() !== "";
 
@@ -49,7 +53,9 @@ function parseLibrary(data: unknown): Library | null {
       if (typeof book !== "object" || book === null) return null;
       const { title, author } = book as Record<string, unknown>;
       if (!isNonEmptyString(title) || !isNonEmptyString(author)) return null;
-      parsedBooks.push({ title, author });
+      const { cover } = book as Record<string, unknown>;
+      // An invalid cover is dropped; it does not reject the library.
+      parsedBooks.push(isCoverId(cover) ? { title, author, cover } : { title, author });
     }
     parsed.push({ name, books: parsedBooks });
   }
@@ -84,6 +90,19 @@ export function saveLibrary(storage: Storage | null, library: Library): boolean 
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+export function hasBook(collection: Collection, book: Book): boolean {
+  return collection.books.some(
+    (item) => sameName(item.title, book.title) && sameName(item.author, book.author),
+  );
+}
+
+export function addBookToOpen(library: Library, book: Book): Library {
+  const collections = library.collections.map((item, index) =>
+    index === library.open ? { ...item, books: [...item.books, book] } : item,
+  );
+  return { ...library, collections };
+}
 
 // Each validator returns an error message, or null when the input is acceptable.
 export function collectionNameError(name: string, collections: Collection[]): string | null {

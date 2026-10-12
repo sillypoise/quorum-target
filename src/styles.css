@@ -85,12 +85,25 @@ input[aria-invalid="true"] {
 
 section li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0 1rem;
 }
 
-section li button {
+section li h3,
+section li p {
   grid-column: 2;
+}
+
+section li button {
+  grid-column: 3;
   grid-row: 1 / span 2;
+}
+
+.cover {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 2.5rem;
+  height: 3.75rem;
+  object-fit: cover;
 }

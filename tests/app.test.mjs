@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { runInThisContext } from "node:vm";
 import { renderToStaticMarkup } from "react-dom/server";
 import { act, createElement } from "react";
@@ -43,6 +43,7 @@ function loadSource(file) {
 }
 const { App } = loadSource("App.tsx");
 const lib = loadSource("library.ts");
+const ol = loadSource("openlibrary.ts");
 
 const SEED_TITLES = ["Kindred", "The Dispossessed", "The Left Hand of Darkness"];
 
@@ -66,9 +67,9 @@ const col = (name, ...titles) => ({
 });
 
 // Mounts a fresh App in jsdom over the given storage; `reload` mounts a new App over the same storage.
-async function withPage(storage, run) {
+async function withPage(storage, run, fetchFn = async () => { throw new Error("unexpected fetch"); }) {
   const dom = new JSDOM('<div id="root"></div>', { url: "https://example.test" });
-  const globals = ["window", "document", "localStorage", "IS_REACT_ACT_ENVIRONMENT"];
+  const globals = ["window", "document", "localStorage", "fetch", "IS_REACT_ACT_ENVIRONMENT"];
   const descriptors = globals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
   let root;
   const container = dom.window.document.getElementById("root");
@@ -95,6 +96,10 @@ async function withPage(storage, run) {
       });
     },
     submit: (name) => page.click(name),
+    unmount: async () => {
+      await act(() => root.unmount());
+      root = null;
+    },
     mount: async () => {
       if (root) await act(() => root.unmount());
       root = createRoot(container);
@@ -105,6 +110,7 @@ async function withPage(storage, run) {
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
     globalThis.localStorage = storage;
+    globalThis.fetch = fetchFn;
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     await page.mount();
     await run(page);
@@ -367,4 +373,335 @@ test("Show authors starts on, hides authors in every collection, and is not pers
     await page.mount();
     assert.equal(checkbox().checked, true);
   });
+});
+
+// --- Open Library: fake fetch only, the tests never touch the network ---
+
+const json = (body, init = {}) => ({ ok: true, json: async () => body, ...init });
+const doc = (title, author, cover) => ({ title, author_name: [author], ...(cover ? { cover_i: cover } : {}) });
+
+// A fake whose responses the test settles by hand. It honours the abort signal like real fetch.
+function manualFetch() {
+  const calls = [];
+  const fn = (url, { signal }) =>
+    new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      calls.push({ url: new URL(url), signal, resolve, reject });
+    });
+  fn.calls = calls;
+  return fn;
+}
+const flush = () => act(async () => { await Promise.resolve(); });
+
+test("a request asks for only the needed fields, 10 results, and a cover URL that 404s when missing", async () => {
+  const fetchFn = manualFetch();
+  const pending = ol.searchBooks("le guin", new AbortController().signal, fetchFn);
+  const { url } = fetchFn.calls[0];
+  assert.equal(url.origin + url.pathname, "https://openlibrary.org/search.json");
+  assert.equal(url.searchParams.get("q"), "le guin");
+  assert.equal(url.searchParams.get("fields"), "title,author_name,cover_i");
+  assert.equal(url.searchParams.get("limit"), "10");
+  fetchFn.calls[0].resolve(json({ docs: [] }));
+  assert.deepEqual(await pending, { kind: "ok", books: [] });
+  assert.equal(ol.coverUrl(8745330), "https://covers.openlibrary.org/b/id/8745330-S.jpg?default=false");
+});
+
+test("candidates are validated: titles, authors, covers, non-object docs and the 10 limit", async () => {
+  const docs = [
+    doc("  Kindred ", "  Octavia E. Butler ", 8745330),
+    { title: "   ", author_name: ["X"] },
+    { title: 5, author_name: ["X"] },
+    { author_name: ["X"] },
+    null,
+    "text",
+    { title: "Mixed authors", author_name: [3, "  ", null, " Second "] },
+    { title: "No authors" },
+    { title: "Empty authors", author_name: [] },
+    { title: "Author string", author_name: "Someone" },
+    { title: "Zero cover", author_name: ["A"], cover_i: 0 },
+    { title: "Float cover", author_name: ["A"], cover_i: 1.5 },
+    { title: "String cover", author_name: ["A"], cover_i: "7" },
+    ...Array.from({ length: 20 }, (_, i) => doc(`Extra ${i}`, "A")),
+  ];
+  const result = await ol.searchBooks("q", new AbortController().signal, async () => json({ docs }));
+  assert.equal(result.kind, "ok");
+  assert.equal(result.books.length, 10);
+  assert.deepEqual(result.books.slice(0, 8), [
+    { title: "Kindred", author: "Octavia E. Butler", cover: 8745330 },
+    { title: "Mixed authors", author: "Second" },
+    { title: "No authors", author: "Unknown author" },
+    { title: "Empty authors", author: "Unknown author" },
+    { title: "Author string", author: "Unknown author" },
+    { title: "Zero cover", author: "A" },
+    { title: "Float cover", author: "A" },
+    { title: "String cover", author: "A" },
+  ]);
+});
+
+test("searchBooks reports failures as values and never rejects", async () => {
+  const reason = async (fetchFn) => (await ol.searchBooks("q", new AbortController().signal, fetchFn)).reason;
+  assert.equal(await reason(async () => { throw new TypeError("offline"); }), "network");
+  assert.equal(await reason(async () => json({}, { ok: false, status: 500 })), "status");
+  assert.equal(await reason(async () => ({ ok: true, json: async () => { throw new SyntaxError("bad"); } })), "malformed");
+  for (const body of [null, [], "x", {}, { docs: {} }]) {
+    assert.equal(await reason(async () => json(body)), "malformed");
+  }
+});
+
+test("a request that does not finish within 8 seconds is aborted and reported as a timeout", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const fetchFn = manualFetch();
+    const pending = ol.searchBooks("q", new AbortController().signal, fetchFn);
+    mock.timers.tick(7999);
+    assert.equal(fetchFn.calls[0].signal.aborted, false);
+    mock.timers.tick(1);
+    assert.equal(fetchFn.calls[0].signal.aborted, true);
+    assert.deepEqual(await pending, { kind: "failed", reason: "timeout" });
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a caller abort is reported as cancelled, not as a failure", async () => {
+  const controller = new AbortController();
+  const fetchFn = manualFetch();
+  const pending = ol.searchBooks("q", controller.signal, fetchFn);
+  controller.abort();
+  assert.deepEqual(await pending, { kind: "cancelled" });
+  assert.deepEqual(await ol.searchBooks("q", controller.signal, fetchFn), { kind: "cancelled" });
+});
+
+test("parser keeps a valid cover, treats a missing or invalid one as absent, and round-trips it", () => {
+  const book = (cover) => ({ title: "T", author: "A", ...(cover === undefined ? {} : { cover }) });
+  const load = (cover) =>
+    lib.loadLibrary(memoryStorage({ [lib.STORAGE_KEY]: stored(1, [{ name: "X", books: [book(cover)] }]) }));
+  assert.deepEqual(load(undefined).collections[0].books, [{ title: "T", author: "A" }]);
+  assert.deepEqual(load(42).collections[0].books, [{ title: "T", author: "A", cover: 42 }]);
+  for (const bad of [0, -3, 1.5, "7", null, true]) {
+    assert.deepEqual(load(bad).collections[0].books, [{ title: "T", author: "A" }], `cover ${bad}`);
+    assert.equal(load(bad).collections[0].name, "X", "the library is not discarded");
+  }
+  const storage = memoryStorage();
+  const library = { open: 0, collections: [{ name: "X", books: [book(42)] }] };
+  lib.saveLibrary(storage, library);
+  assert.deepEqual(lib.loadLibrary(storage), library);
+  assert.equal(lib.STORAGE_VERSION, 1);
+  assert.equal(lib.isCoverId(1), true);
+  assert.equal(lib.isCoverId(0), false);
+});
+
+test("hasBook ignores case and surrounding spaces; addBookToOpen changes only the open collection", () => {
+  const collection = { name: "X", books: [{ title: "Kindred", author: "Octavia E. Butler" }] };
+  assert.equal(lib.hasBook(collection, { title: "  kindred ", author: "OCTAVIA e. butler  " }), true);
+  assert.equal(lib.hasBook(collection, { title: "Kindred", author: "Someone else" }), false);
+  assert.equal(lib.hasBook(collection, { title: "Dawn", author: "Octavia E. Butler" }), false);
+
+  const library = { open: 1, collections: [col("A", "a1"), col("B", "b1"), col("C", "c1")] };
+  const before = JSON.stringify(library);
+  const added = { title: "New", author: "Au", cover: 5 };
+  const next = lib.addBookToOpen(library, added);
+  assert.equal(JSON.stringify(library), before, "input is not mutated");
+  assert.equal(next.open, 1);
+  assert.deepEqual(next.collections[1].books.at(-1), added);
+  assert.equal(next.collections[1].books.length, 2);
+  assert.deepEqual(next.collections[0], library.collections[0]);
+  assert.deepEqual(next.collections[2], library.collections[2]);
+});
+
+const searchFor = async (page, text) => {
+  await page.type("Find a book on Open Library", text);
+  await page.click("Search");
+};
+const resultItems = (page) => [...page.container.querySelectorAll('ul[aria-label="Search results"] li')];
+
+test("a search shows results with covers, Add saves the book with its cover, and it survives a reload", async () => {
+  const storage = memoryStorage();
+  const fetchFn = async () => json({ docs: [doc("Parable of the Sower", "Octavia E. Butler", 77), doc("Dawn", "Octavia E. Butler")] });
+  await withPage(storage, async (page) => {
+    await searchFor(page, "butler");
+    await flush();
+    const items = resultItems(page);
+    assert.equal(items.length, 2);
+    assert.equal(items[0].querySelector("img").getAttribute("src"), ol.coverUrl(77));
+    assert.equal(items[0].querySelector("img").getAttribute("alt"), "");
+    assert.equal(items[1].querySelector("img"), null);
+    await page.click("Add Parable of the Sower");
+    assert.equal(page.h2(), "Sci-fi (4 books)");
+    assert.deepEqual(JSON.parse(storage.getItem(lib.STORAGE_KEY)).collections[0].books.at(-1), {
+      title: "Parable of the Sower", author: "Octavia E. Butler", cover: 77,
+    });
+    await page.mount();
+    assert.equal(page.h2(), "Sci-fi (4 books)");
+    assert.equal(page.container.querySelectorAll("section > ul li img")[0].getAttribute("src"), ol.coverUrl(77));
+  }, fetchFn);
+});
+
+test("a result already in the open collection is marked and disabled, while manual add allows duplicates", async () => {
+  const fetchFn = async () => json({ docs: [doc(" kindred", "octavia e. BUTLER"), doc("Dawn", "Octavia E. Butler")] });
+  await withPage(memoryStorage(), async (page) => {
+    await searchFor(page, "kindred");
+    await flush();
+    const [first, second] = resultItems(page).map((li) => li.querySelector("button"));
+    assert.equal(first.disabled, true);
+    assert.equal(first.textContent, "Already added");
+    assert.equal(second.disabled, false);
+    await page.type("Title", "Kindred");
+    await page.type("Author", "Octavia E. Butler");
+    await page.click("Add book");
+    assert.equal(page.h2(), "Sci-fi (4 books)");
+  }, fetchFn);
+});
+
+test("Add goes to the collection that is open at that moment", async () => {
+  const fetchFn = async () => json({ docs: [doc("Dawn", "Octavia E. Butler")] });
+  await withPage(memoryStorage(), async (page) => {
+    await page.type("New collection name", "Other");
+    await page.submit("Create collection");
+    await page.click("Sci-fi");
+    await searchFor(page, "dawn");
+    await flush();
+    await page.click("Other");
+    await page.click("Add Dawn");
+    assert.equal(page.h2(), "Other (1 book)");
+    await page.click("Sci-fi");
+    assert.equal(page.h2(), "Sci-fi (3 books)");
+  }, fetchFn);
+});
+
+test("an empty query is rejected next to the field without a request", async () => {
+  let requests = 0;
+  await withPage(memoryStorage(), async (page) => {
+    await page.type("Find a book on Open Library", "   ");
+    await page.click("Search");
+    assert.deepEqual(page.alerts(), ["Error: Enter a title or author to search for."]);
+    assert.equal(page.container.querySelector("#book-search").getAttribute("aria-invalid"), "true");
+    assert.equal(requests, 0);
+  }, async () => { requests += 1; return json({ docs: [] }); });
+});
+
+test("loading, no results and each failure are shown as text and a retry works", async () => {
+  const fetchFn = manualFetch();
+  await withPage(memoryStorage(), async (page) => {
+    await searchFor(page, "nothing");
+    assert.match(page.text(), /Searching/);
+    fetchFn.calls[0].resolve(json({ docs: [] }));
+    await flush();
+    assert.doesNotMatch(page.text(), /Searching/);
+    assert.match(page.text(), /No books found/);
+
+    const failures = [
+      [(call) => call.reject(new TypeError("offline")), /Could not reach Open Library/],
+      [(call) => call.resolve(json({}, { ok: false, status: 503 })), /could not run the search/],
+      [(call) => call.resolve({ ok: true, json: async () => { throw new SyntaxError("x"); } }), /cannot read/],
+    ];
+    for (const [fail, message] of failures) {
+      await searchFor(page, "again");
+      fail(fetchFn.calls.at(-1));
+      await flush();
+      assert.equal(page.alerts().length, 1);
+      assert.match(page.alerts()[0], message);
+      assert.doesNotMatch(page.text(), /Searching/);
+    }
+    await searchFor(page, "retry");
+    fetchFn.calls.at(-1).resolve(json({ docs: [doc("Dawn", "Octavia E. Butler")] }));
+    await flush();
+    assert.deepEqual(page.alerts(), []);
+    assert.equal(resultItems(page).length, 1);
+  }, fetchFn);
+});
+
+test("a search that never answers times out after 8 seconds with a visible message", async () => {
+  const fetchFn = manualFetch();
+  await withPage(memoryStorage(), async (page) => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      await searchFor(page, "slow");
+      assert.match(page.text(), /Searching/);
+      await act(async () => { mock.timers.tick(8000); });
+      await flush();
+    } finally {
+      mock.timers.reset();
+    }
+    assert.match(page.alerts()[0], /timed out/);
+    assert.doesNotMatch(page.text(), /Searching/);
+    await searchFor(page, "slow again");
+    assert.match(page.text(), /Searching/);
+  }, fetchFn);
+});
+
+test("overlapping searches: the earlier request is aborted, only the latest shows, loading clears with the latest", async () => {
+  const fetchFn = manualFetch();
+  await withPage(memoryStorage(), async (page) => {
+    await searchFor(page, "first");
+    await searchFor(page, "second");
+    const [first, second] = fetchFn.calls;
+    assert.equal(first.signal.aborted, true);
+    assert.equal(second.signal.aborted, false);
+    // The earlier response arrives late anyway, as if the abort had not stopped it.
+    first.resolve(json({ docs: [doc("Old result", "Old Author")] }));
+    await flush();
+    assert.match(page.text(), /Searching/, "a superseded search must not clear loading");
+    assert.equal(resultItems(page).length, 0);
+    second.resolve(json({ docs: [doc("New result", "New Author")] }));
+    await flush();
+    assert.doesNotMatch(page.text(), /Searching/);
+    assert.deepEqual(resultItems(page).map((li) => li.querySelector("h3").textContent), ["New result"]);
+  }, fetchFn);
+});
+
+test("a late failure from a superseded search shows nothing, and unmounting aborts the request", async () => {
+  const fetchFn = manualFetch();
+  await withPage(memoryStorage(), async (page) => {
+    await searchFor(page, "first");
+    await searchFor(page, "second");
+    fetchFn.calls[0].reject(new TypeError("late"));
+    await flush();
+    assert.deepEqual(page.alerts(), []);
+    const errors = [];
+    const log = console.error;
+    console.error = (...args) => errors.push(args);
+    try {
+      await page.unmount();
+      fetchFn.calls[1].resolve(json({ docs: [doc("After unmount", "A")] }));
+      await flush();
+    } finally {
+      console.error = log;
+    }
+    assert.equal(fetchFn.calls[1].signal.aborted, true);
+    assert.deepEqual(errors, []);
+  }, fetchFn);
+});
+
+test("a cover that fails to load is removed and stays removed; a neighbour's cover survives a removal", async () => {
+  const storage = memoryStorage({
+    [lib.STORAGE_KEY]: stored(1, [
+      { name: "X", books: [
+        { title: "A", author: "a", cover: 1 },
+        { title: "B", author: "b", cover: 2 },
+        { title: "C", author: "c" },
+      ] },
+    ]),
+  });
+  const fetchFn = async () => json({ docs: [doc("R1", "r", 11), doc("R2", "r", 12)] });
+  await withPage(storage, async (page) => {
+    const listImgs = () => [...page.container.querySelectorAll("section > ul li img")].map((i) => i.getAttribute("src"));
+    assert.deepEqual(listImgs(), [ol.coverUrl(1), ol.coverUrl(2)]);
+    const fail = (img) => act(() => img.dispatchEvent(new page.container.ownerDocument.defaultView.Event("error")));
+    await fail(page.container.querySelector("section > ul li img"));
+    assert.deepEqual(listImgs(), [ol.coverUrl(2)]);
+    await act(() => page.container.querySelector('input[type="checkbox"]').click());
+    assert.deepEqual(listImgs(), [ol.coverUrl(2)], "a re-render keeps the failed cover hidden");
+
+    // Index-keyed list: after A is removed, B reuses A's component instance and must still show.
+    await page.click("Remove A");
+    assert.deepEqual(listImgs(), [ol.coverUrl(2)]);
+
+    await searchFor(page, "r");
+    await flush();
+    const resultImgs = () => resultItems(page).map((li) => li.querySelector("img")?.getAttribute("src") ?? null);
+    assert.deepEqual(resultImgs(), [ol.coverUrl(11), ol.coverUrl(12)]);
+    await fail(resultItems(page)[0].querySelector("img"));
+    assert.deepEqual(resultImgs(), [null, ol.coverUrl(12)]);
+  }, fetchFn);
 });

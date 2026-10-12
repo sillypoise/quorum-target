@@ -1,8 +1,12 @@
 import { useState, type FormEvent } from "react";
+import { Cover } from "./Cover.tsx";
+import { useBookSearch } from "./useBookSearch.ts";
 import {
+  addBookToOpen,
   bookErrors,
   browserStorage,
   collectionNameError,
+  hasBook,
   loadLibrary,
   saveLibrary,
   type Library,
@@ -19,6 +23,9 @@ export function App() {
   const [author, setAuthor] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
   const [authorError, setAuthorError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const found = useBookSearch();
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const collection = library.collections[library.open];
@@ -58,14 +65,20 @@ export function App() {
     setTitleError(errors.title);
     setAuthorError(errors.author);
     if (errors.title || errors.author) return;
-    const collections = library.collections.map((item, index) =>
-      index === library.open
-        ? { ...item, books: [...item.books, { title: title.trim(), author: author.trim() }] }
-        : item,
-    );
-    commit({ ...library, collections });
+    commit(addBookToOpen(library, { title: title.trim(), author: author.trim() }));
     setTitle("");
     setAuthor("");
+  }
+
+  function runSearch(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = query.trim();
+    if (trimmed === "") {
+      setQueryError("Enter a title or author to search for.");
+      return;
+    }
+    setQueryError(null);
+    found.search(trimmed);
   }
 
   function removeBook(bookIndex: number) {
@@ -129,6 +142,7 @@ export function App() {
         <ul>
           {sortedBooks.map(({ book, index }) => (
             <li key={index}>
+              <Cover id={book.cover} />
               <h3>{book.title}</h3>
               {showAuthors && <p>{book.author}</p>}
               <button type="button" aria-label={`Remove ${book.title}`} onClick={() => removeBook(index)}>
@@ -137,6 +151,47 @@ export function App() {
             </li>
           ))}
         </ul>
+        <form onSubmit={runSearch} noValidate aria-label="Find a book">
+          <label htmlFor="book-search">Find a book on Open Library</label>
+          <input
+            id="book-search"
+            value={query}
+            aria-invalid={queryError ? true : undefined}
+            aria-describedby={queryError ? "book-search-error" : undefined}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <button type="submit">Search</button>
+          {queryError && (
+            <p id="book-search-error" role="alert" className="error">Error: {queryError}</p>
+          )}
+        </form>
+        {found.status === "loading" && <p role="status">Searching…</p>}
+        {found.status === "failed" && <p role="alert" className="error">Error: {found.error}</p>}
+        {found.status === "done" && found.books.length === 0 && (
+          <p role="status">No books found. Try a different title or author, or add the book below.</p>
+        )}
+        {found.books.length > 0 && (
+          <ul aria-label="Search results">
+            {found.books.map((book, index) => {
+              const added = hasBook(collection, book);
+              return (
+                <li key={index}>
+                  <Cover id={book.cover} />
+                  <h3>{book.title}</h3>
+                  <p>{book.author}</p>
+                  <button
+                    type="button"
+                    disabled={added}
+                    aria-label={`${added ? "Already added" : "Add"} ${book.title}`}
+                    onClick={() => commit(addBookToOpen(library, book))}
+                  >
+                    {added ? "Already added" : "Add"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <form onSubmit={addBook} noValidate aria-label={`Add a book to ${collection.name}`}>
           <label htmlFor="book-title">Title</label>
           <input
