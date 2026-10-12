@@ -1,20 +1,41 @@
 import { useState, type FormEvent } from "react";
 import { Cover } from "./Cover.tsx";
+import { DueDateForm } from "./DueDateForm.tsx";
 import { useBookSearch } from "./useBookSearch.ts";
 import {
   addBookToOpen,
   bookErrors,
   browserStorage,
   collectionNameError,
+  dueDateError,
+  dueStatus,
   hasBook,
   loadLibrary,
   saveLibrary,
+  todayString,
+  type Book,
+  type DueStatus,
   type Library,
 } from "./library.ts";
 
 const bookCount = (count: number) => `${count} ${count === 1 ? "book" : "books"}`;
 
-export function App() {
+function badgeText(status: DueStatus, days: number) {
+  const unit = `${days} ${days === 1 ? "day" : "days"}`;
+  if (status === "upcoming") return `Due in ${unit}`;
+  if (status === "approaching") return `Due soon: in ${unit}`;
+  if (status === "due-today") return "Due today";
+  return `Overdue by ${unit}`;
+}
+
+function DueBadge({ book, today }: { book: Book; today: string }) {
+  const { status, days } = dueStatus(book, today);
+  if (status === "none") return null;
+  return <span className={`badge ${status}`}>{badgeText(status, days)}</span>;
+}
+
+// today is injectable so tests control the date; it defaults to the browser's local date.
+export function App({ today = todayString() }: { today?: string }) {
   const [library, setLibrary] = useState<Library>(() => loadLibrary(browserStorage()));
   const [showAuthors, setShowAuthors] = useState(true);
   const [newName, setNewName] = useState("");
@@ -23,6 +44,8 @@ export function App() {
   const [author, setAuthor] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
   const [authorError, setAuthorError] = useState<string | null>(null);
+  const [dueInput, setDueInput] = useState("");
+  const [dueError, setDueError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [queryError, setQueryError] = useState<string | null>(null);
   const found = useBookSearch();
@@ -64,10 +87,15 @@ export function App() {
     const errors = bookErrors({ title, author });
     setTitleError(errors.title);
     setAuthorError(errors.author);
-    if (errors.title || errors.author) return;
-    commit(addBookToOpen(library, { title: title.trim(), author: author.trim() }));
+    const dateError = dueDateError(dueInput);
+    setDueError(dateError);
+    if (errors.title || errors.author || dateError) return;
+    const book: Book = { title: title.trim(), author: author.trim() };
+    if (dueInput.trim() !== "") book.dueDate = dueInput.trim();
+    commit(addBookToOpen(library, book));
     setTitle("");
     setAuthor("");
+    setDueInput("");
   }
 
   function runSearch(event: FormEvent) {
@@ -79,6 +107,26 @@ export function App() {
     }
     setQueryError(null);
     found.search(trimmed);
+  }
+
+  function changeBook(bookIndex: number, change: (book: Book) => Book) {
+    const collections = library.collections.map((item, index) =>
+      index === library.open
+        ? { ...item, books: item.books.map((book, i) => (i === bookIndex ? change(book) : book)) }
+        : item,
+    );
+    commit({ ...library, collections });
+  }
+
+  // Unread removes the field, so a never-read book and a read-then-unread book store identically.
+  function toggleRead(bookIndex: number) {
+    changeBook(bookIndex, ({ read, ...rest }) => (read ? rest : { ...rest, read: true }));
+  }
+
+  function setDueDate(bookIndex: number, dueDate: string | null) {
+    changeBook(bookIndex, ({ dueDate: _old, ...rest }) =>
+      dueDate === null ? rest : { ...rest, dueDate },
+    );
   }
 
   function removeBook(bookIndex: number) {
@@ -148,6 +196,29 @@ export function App() {
               <button type="button" aria-label={`Remove ${book.title}`} onClick={() => removeBook(index)}>
                 Remove
               </button>
+              <div className="book-extra">
+                {book.read ? (
+                  <span className="badge read">Read</span>
+                ) : (
+                  <DueBadge book={book} today={today} />
+                )}
+                <button
+                  type="button"
+                  aria-label={`${book.read ? "Mark unread" : "Mark read"}: ${book.title}`}
+                  onClick={() => toggleRead(index)}
+                >
+                  {book.read ? "Mark unread" : "Mark read"}
+                </button>
+                {!book.read && (
+                  <DueDateForm
+                    key={`${index}|${book.title}|${book.author}|${book.dueDate ?? ""}`}
+                    id={`due-${index}`}
+                    title={book.title}
+                    dueDate={book.dueDate}
+                    onSave={(date) => setDueDate(index, date)}
+                  />
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -211,6 +282,16 @@ export function App() {
             onChange={(event) => setAuthor(event.target.value)}
           />
           {authorError && <p id="book-author-error" role="alert" className="error">Error: {authorError}</p>}
+          <label htmlFor="book-due">Due date (optional)</label>
+          <input
+            id="book-due"
+            type="date"
+            value={dueInput}
+            aria-invalid={dueError ? true : undefined}
+            aria-describedby={dueError ? "book-due-error" : undefined}
+            onChange={(event) => setDueInput(event.target.value)}
+          />
+          {dueError && <p id="book-due-error" role="alert" className="error">Error: {dueError}</p>}
           <button type="submit">Add book</button>
         </form>
       </section>

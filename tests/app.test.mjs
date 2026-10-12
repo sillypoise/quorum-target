@@ -74,6 +74,7 @@ async function withPage(storage, run, fetchFn = async () => { throw new Error("u
   let root;
   const container = dom.window.document.getElementById("root");
   const page = {
+    today: "2025-06-15",
     container,
     text: () => container.textContent,
     titles: () => [...container.querySelectorAll("li h3")].map((node) => node.textContent),
@@ -103,7 +104,7 @@ async function withPage(storage, run, fetchFn = async () => { throw new Error("u
     mount: async () => {
       if (root) await act(() => root.unmount());
       root = createRoot(container);
-      await act(() => root.render(createElement(App)));
+      await act(() => root.render(createElement(App, { today: page.today })));
     },
   };
   try {
@@ -704,4 +705,211 @@ test("a cover that fails to load is removed and stays removed; a neighbour's cov
     await fail(resultItems(page)[0].querySelector("img"));
     assert.deepEqual(resultImgs(), [null, ol.coverUrl(12)]);
   }, fetchFn);
+});
+
+// --- due dates and the read flag ---
+
+test("the shared date rule accepts real calendar dates and rejects everything else", () => {
+  for (const ok of ["2024-02-29", "2025-12-31", "1000-01-01", "9999-12-31"]) {
+    assert.equal(lib.isDueDate(ok), true, ok);
+  }
+  const bad = ["2025-02-30", "2023-02-29", "1900-02-29", "2025-13-01", "2025-00-10", "2025-01-00",
+    "2025-04-31", "999-01-01", "0999-01-01", "0099-01-01", "25-01-01", "2025-1-05", "2025-01-5",
+    " 2025-01-05", "2025-01-05 ", "2025-01-05T00:00", "x2025-01-05", "", "  ", null, undefined, 20250105, {}];
+  for (const value of bad) assert.equal(lib.isDueDate(value), false, String(value));
+});
+
+test("dueStatus covers each status, the 14-day window boundary, today versus one day late", () => {
+  const status = (dueDate, today, extra = {}) => lib.dueStatus({ title: "T", author: "A", dueDate, ...extra }, today);
+  assert.deepEqual(status("2025-07-01", "2025-06-15"), { status: "upcoming", days: 16 });
+  assert.deepEqual(status("2025-06-29", "2025-06-15"), { status: "approaching", days: 14 });
+  assert.deepEqual(status("2025-06-30", "2025-06-15"), { status: "upcoming", days: 15 });
+  assert.deepEqual(status("2025-06-16", "2025-06-15"), { status: "approaching", days: 1 });
+  assert.deepEqual(status("2025-06-15", "2025-06-15"), { status: "due-today", days: 0 });
+  assert.deepEqual(status("2025-06-14", "2025-06-15"), { status: "overdue", days: 1 });
+  assert.deepEqual(status("2025-05-15", "2025-06-15"), { status: "overdue", days: 31 });
+  // month and year boundaries, and a leap day
+  assert.deepEqual(status("2026-01-02", "2025-12-31"), { status: "approaching", days: 2 });
+  assert.deepEqual(status("2025-12-30", "2026-01-02"), { status: "overdue", days: 3 });
+  assert.deepEqual(status("2024-03-01", "2024-02-28"), { status: "approaching", days: 2 });
+  assert.deepEqual(status("2025-03-01", "2025-02-28"), { status: "approaching", days: 1 });
+  // none: read, no date, invalid date, unparseable today
+  const none = { status: "none", days: 0 };
+  assert.deepEqual(status("2025-06-14", "2025-06-15", { read: true }), none);
+  assert.deepEqual(status(undefined, "2025-06-15"), none);
+  assert.deepEqual(status("2025-02-30", "2025-06-15"), none);
+  assert.deepEqual(status("2025-06-14", "not a date"), none);
+});
+
+test("todayString formats the local calendar date, not the UTC one", () => {
+  assert.equal(lib.todayString(new Date(2025, 0, 5, 23, 59, 59)), "2025-01-05");
+  assert.equal(lib.todayString(new Date(2025, 11, 31, 0, 0, 1)), "2025-12-31");
+  assert.match(lib.todayString(), /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("the due date input validator treats empty as no date and rejects invalid text", () => {
+  assert.equal(lib.dueDateError(""), null);
+  assert.equal(lib.dueDateError("   "), null);
+  assert.equal(lib.dueDateError(" 2025-02-28 "), null);
+  assert.equal(lib.dueDateError("2020-01-01"), null, "a past date is accepted");
+  for (const bad of ["2025-02-30", "2025-13-01", "soon", "2025-1-1"]) {
+    assert.match(lib.dueDateError(bad), /real date/, bad);
+  }
+});
+
+test("due date and read flag round-trip; bad ones are dropped from their book only", () => {
+  const storage = memoryStorage();
+  const library = { open: 0, collections: [{ name: "X", books: [
+    { title: "A", author: "a", cover: 3, dueDate: "2025-07-01", read: true },
+    { title: "B", author: "b", dueDate: "2025-07-02" },
+  ] }] };
+  lib.saveLibrary(storage, library);
+  assert.deepEqual(lib.loadLibrary(storage), library);
+  assert.equal(lib.STORAGE_VERSION, 1);
+
+  const badFields = [
+    { dueDate: "2025-02-30" }, { dueDate: "" }, { dueDate: "  " }, { dueDate: 20250701 },
+    { dueDate: "2025-7-1" }, { read: false }, { read: "true" }, { read: 1 },
+  ];
+  for (const bad of badFields) {
+    const raw = stored(1, [{ name: "X", books: [{ title: "A", author: "a", cover: 9, ...bad }, { title: "B", author: "b", dueDate: "2025-07-02" }] }, col("Y", "k")]);
+    const loaded = lib.loadLibrary(memoryStorage({ [lib.STORAGE_KEY]: raw }));
+    assert.deepEqual(loaded.collections[0].books, [
+      { title: "A", author: "a", cover: 9 },
+      { title: "B", author: "b", dueDate: "2025-07-02" },
+    ], JSON.stringify(bad));
+    assert.equal(loaded.collections.length, 2, "the rest of the library is kept");
+  }
+  // old-shape data, with and without covers, is unchanged
+  const old = [{ name: "X", books: [{ title: "A", author: "a" }, { title: "B", author: "b", cover: 4 }] }];
+  assert.deepEqual(lib.loadLibrary(memoryStorage({ [lib.STORAGE_KEY]: stored(1, old) })).collections, old);
+});
+
+const dueLib = (...books) => ({ [lib.STORAGE_KEY]: stored(1, [{ name: "X", books }]) });
+const savedBooks = (storage) => JSON.parse(storage.getItem(lib.STORAGE_KEY)).collections[0].books;
+const badges = (page) => [...page.container.querySelectorAll(".badge")].map((n) => n.textContent);
+const dueInput = (page, title) => page.container.querySelector(`#${[...page.container.querySelectorAll("label")].find((l) => l.textContent === `Due date for ${title}`).htmlFor}`);
+
+test("badges show distinct text for each status and none for books without a date", async () => {
+  const storage = memoryStorage(dueLib(
+    { title: "A", author: "a", dueDate: "2025-08-01" },
+    { title: "B", author: "b", dueDate: "2025-06-20" },
+    { title: "C", author: "c", dueDate: "2025-06-15" },
+    { title: "D", author: "d", dueDate: "2025-06-13" },
+    { title: "E", author: "e" },
+    { title: "F", author: "f", dueDate: "2025-06-13", read: true },
+  ));
+  await withPage(storage, async (page) => {
+    assert.deepEqual(badges(page), ["Due in 47 days", "Due soon: in 5 days", "Due today", "Overdue by 2 days", "Read"]);
+    assert.equal(page.container.querySelectorAll(".badge.overdue").length, 1);
+    assert.equal(page.container.querySelectorAll(".badge.approaching").length, 1);
+    // 5 unread books have a date control, the read book does not; plus the Add form's field
+    assert.equal(page.container.querySelectorAll('input[type="date"]').length, 5 + 1);
+    assert.equal(page.button("Mark unread: F") !== undefined, true);
+  });
+});
+
+test("a due date can be set, changed and cleared on an existing book; an empty submit errors", async () => {
+  const storage = memoryStorage(dueLib({ title: "A", author: "a" }, { title: "B", author: "b" }));
+  await withPage(storage, async (page) => {
+    assert.equal(page.button("Clear due date for A"), undefined, "no Clear without a date");
+    await page.type("Due date for A", "2025-06-20");
+    assert.equal(storage.writes, 0, "typing alone saves nothing");
+    await page.click("Set due date for A");
+    assert.deepEqual(savedBooks(storage)[0], { title: "A", author: "a", dueDate: "2025-06-20" });
+    assert.deepEqual(badges(page), ["Due soon: in 5 days"]);
+    assert.equal(savedBooks(storage)[1].dueDate, undefined, "the neighbour is untouched");
+
+    await page.type("Due date for A", "2025-06-10");
+    await page.click("Set due date for A");
+    assert.equal(savedBooks(storage)[0].dueDate, "2025-06-10", "a past date is accepted");
+    assert.deepEqual(badges(page), ["Overdue by 5 days"]);
+
+    // an empty submit shows the error and commits nothing
+    await page.type("Due date for A", "");
+    const writes = storage.writes;
+    await page.click("Set due date for A");
+    assert.deepEqual(page.alerts(), ["Error: Enter a date, or use Clear due date."]);
+    assert.equal(dueInput(page, "A").getAttribute("aria-invalid"), "true");
+    assert.equal(storage.writes, writes);
+    assert.equal(savedBooks(storage)[0].dueDate, "2025-06-10");
+
+    await page.click("Clear due date for A");
+    assert.equal(savedBooks(storage)[0].dueDate, undefined);
+    assert.deepEqual(badges(page), []);
+    assert.equal(page.button("Clear due date for A"), undefined);
+  });
+});
+
+test("a due date set in the Add form is saved with the book; empty adds none", async () => {
+  const storage = memoryStorage();
+  await withPage(storage, async (page) => {
+    await page.type("Title", "Dune");
+    await page.type("Author", "Herbert");
+    await page.type("Due date (optional)", "2025-06-16");
+    await page.click("Add book");
+    await page.type("Title", "Emma");
+    await page.type("Author", "Austen");
+    await page.click("Add book");
+    const books = savedBooks(storage);
+    assert.deepEqual(books.at(-2), { title: "Dune", author: "Herbert", dueDate: "2025-06-16" });
+    assert.deepEqual(books.at(-1), { title: "Emma", author: "Austen" });
+    assert.equal(page.container.querySelector("#book-due").value, "");
+    assert(badges(page).includes("Due soon: in 1 day"));
+  });
+});
+
+test("marking read keeps the date but hides it; unread restores it without a stored read:false", async () => {
+  const storage = memoryStorage(dueLib({ title: "A", author: "a", dueDate: "2025-06-10" }, { title: "B", author: "b" }));
+  await withPage(storage, async (page) => {
+    await page.click("Mark read: A");
+    assert.deepEqual(savedBooks(storage)[0], { title: "A", author: "a", dueDate: "2025-06-10", read: true });
+    assert.deepEqual(badges(page), ["Read"]);
+    assert.equal(page.container.querySelectorAll("#due-0").length, 0, "no date control for a read book");
+    assert.equal(page.button("Clear due date for A"), undefined);
+
+    await page.mount();
+    assert.deepEqual(badges(page), ["Read"], "read survives a reload");
+
+    await page.click("Mark unread: A");
+    assert.deepEqual(badges(page), ["Overdue by 5 days"]);
+    assert.equal(dueInput(page, "A").value, "2025-06-10");
+    const first = savedBooks(storage)[0];
+    assert.deepEqual(first, { title: "A", author: "a", dueDate: "2025-06-10" });
+    assert.equal("read" in first, false);
+
+    // read then unread stores the same as never read
+    await page.click("Mark read: B");
+    await page.click("Mark unread: B");
+    assert.deepEqual(savedBooks(storage)[1], { title: "B", author: "b" });
+    assert.equal(JSON.stringify(savedBooks(storage)[1]), JSON.stringify({ title: "B", author: "b" }));
+  });
+});
+
+test("a draft in one book's date input does not move to a neighbour after a removal", async () => {
+  const storage = memoryStorage(dueLib(
+    { title: "A", author: "a" },
+    { title: "B", author: "b", dueDate: "2025-07-01" },
+    { title: "C", author: "c" },
+  ));
+  await withPage(storage, async (page) => {
+    await page.type("Due date for A", "2025-09-09");
+    await page.click("Remove A");
+    assert.equal(dueInput(page, "B").value, "2025-07-01");
+    assert.equal(dueInput(page, "C").value, "");
+    assert.equal(page.container.querySelector("input[value='2025-09-09']"), null);
+    assert.equal(storage.writes, 1, "only the removal was saved");
+  });
+});
+
+test("due dates and read flags persist across a reload", async () => {
+  const storage = memoryStorage(dueLib({ title: "A", author: "a" }, { title: "B", author: "b" }));
+  await withPage(storage, async (page) => {
+    await page.type("Due date for A", "2025-06-18");
+    await page.click("Set due date for A");
+    await page.click("Mark read: B");
+    await page.mount();
+    assert.deepEqual(badges(page), ["Due soon: in 3 days", "Read"]);
+    assert.equal(dueInput(page, "A").value, "2025-06-18");
+  });
 });
